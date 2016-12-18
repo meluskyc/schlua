@@ -217,17 +217,18 @@
     (cases STATFORSUF suf
       (statforsuf2 (first rest blk) (error-not-implemented)) ; for iterators
       (statforsuf1 (first rest blk)
-        (letrec ((loop (lambda (loop-env temp)
-          (letrec
-            ((initval (expval->num (apply-env loop-env genv firstid)))
-            (termval (expval->num (eval-expr (car rest) loop-env)))
-            (incval (expval->num (if (= 2 (length rest)) (eval-expr (cadr rest) lenv) (num-val 1))))
-            (env (extend-local-env firstid (num-val (+ initval incval)) loop-env)))
-          (if (= termval (+ initval incval)) (void)
-            (loop
-              env
-              (eval-block blk env)))))))
-          (loop (extend-local-env firstid (eval-expr first lenv) lenv) (void)))))))
+        (let
+          ((initval (expval->num (eval-expr first lenv)))
+          (termval (expval->num (eval-expr (car rest) lenv)))
+          (incval (expval->num (if (= 2 (length rest)) (eval-expr (cadr rest) lenv) (num-val 1)))))
+        (let
+          ((compare-op (if (positive? incval) > <)))
+        (letrec ((loop (lambda (counter)
+          (if (compare-op counter termval) (void)
+            (begin
+              (eval-block blk (extend-local-env firstid (num-val counter) lenv))
+              (loop (+ counter incval)))))))
+        (loop initval))))))))
 
 ;; eval-expr : EXPR * LocalEnv
 (define eval-expr
