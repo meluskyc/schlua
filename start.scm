@@ -79,7 +79,7 @@
   (lambda (pexplist exprlist lenv)
     (eval-assignment (map (lambda (p) (eval-var p lenv)) pexplist) exprlist #f lenv)))
 
-;; eval-assignment : List(Id) * List(EXPR) * Bool * LocalEnv
+;; eval-assignment : List * List(EXPR) * Bool * LocalEnv
 ;; TODO: clean this up
 (define eval-assignment
   (lambda (names exprs local? lenv)
@@ -89,7 +89,7 @@
         (if local?
           (eval-assignment (cdr names) exprs (extend-local-env (car names) (nil-val) lenv))
           (begin
-            (extend-env lenv genv (car names) (nil-val))
+            (finish-global-assign (car names) (nil-val) lenv)
             (eval-assignment (cdr names) exprs local? lenv))))
       (else
         (let ((exp (eval-expr (car exprs) lenv)))
@@ -98,7 +98,7 @@
               (if local?
                 (eval-assignment (cdr names) (cdr exprs) (extend-local-env (car names) (car exp) lenv))
                 (begin
-                  (extend-env lenv genv (car names) (car exp))
+                  (finish-global-assign (car names) (car exp) lenv)
                   (eval-assignment (cdr names) (cdr exprs) lenv)))
               (if local?
                 (letrec ((loop (lambda (names2 exprs2 lenv2)
@@ -109,11 +109,22 @@
                     (else
                       (loop (cdr names2) (cdr exprs2) (extend-local-env (car names2) (car exprs2) lenv2)))))))
                 (loop names exp lenv))
-                (extend-env* lenv genv names exp)))
+                (letrec ((loop (lambda (names2 exprs2)
+                  (cond
+                    ((null? names2) (void))
+                    ((null? exprs2)
+                      (begin
+                        (finish-global-assign (car names2) (nil-val) lenv)
+                        (loop (cdr names2) exprs2)))
+                    (else
+                      (begin
+                        (finish-global-assign (car names2) (car exprs2) lenv)
+                        (loop (cdr names2) (cdr exprs2))))))))
+                (loop names exp lenv))))
             (if local?
               (eval-assignment (cdr names) (cdr exprs) local? (extend-local-env (car names) exp lenv))
               (begin
-                (extend-env lenv genv (car names) exp)
+                (finish-global-assign (car names) exp lenv)
                 (eval-assignment (cdr names) (cdr exprs) local? lenv)))))))))
 
 ;; eval-var : PRIMARYEXP * LocalEnv
@@ -121,10 +132,30 @@
   (lambda (primaryexp lenv)
     (cases PRIMARYEXPR primaryexp
       (pexpr (pre list-sufs)
-        (if (= (length list-sufs) 0)
-          (cases PREFIXEXPR pre
-            (prefixid (id) id))
-          (error-not-implemented))))))
+        (cases PREFIXEXPR pre
+          (prefixid (id)
+            (let ((len-sufs (length list-sufs)))
+              (cond
+                ((> len-sufs 1) (error-not-implemented))
+                ((= 1 len-sufs) (eval-var-suf id (car list-sufs) lenv))
+                ((zero? len-sufs) id)))))))))
+
+;; eval-var-suf : Id * PRIMARYEXPRSUF * Bool * LocalEnv
+(define eval-var-suf
+  (lambda (tbl-name suf lenv)
+    (let ((tbl (apply-env lenv genv tbl-name)))
+      (if (table-val? tbl)
+        (cases PRIMARYEXPRSUF suf
+          (pexprdot (fld-name) (list tbl fld-name))
+          (pexprbracket (exp) (list tbl (eval-expr exp lenv)))
+          (else (error-not-implemented)))
+        (error-attempt-index tbl-name (expval-name tbl))))))
+
+(define finish-global-assign
+  (lambda (var val lenv)
+    (if (pair? var) ;; it's a field assignment
+      (table-set! (expval->table (car var)) (cadr var) val)
+      (extend-env lenv genv var val))))
 
 ;; eval-functionstat : Id * List(Id) * List(Id) * BODY * LocalEnv
 (define eval-functionstat
@@ -175,6 +206,20 @@
                   (exprlist->list (car list-exprlist)))))
             (apply-procedure name
               proc1 (map (lambda (e) (eval-expr e lenv)) exprs))))))
+      (pexprdot (id)
+        (let* (
+          (tbl-name (eval-prefixexpr pre lenv))
+          (tbl (apply-env lenv genv tbl-name)))
+        (if (table-val? tbl)
+          (table-get (expval->table tbl) id)
+          (error-attempt-index tbl-name (expval-name tbl)))))
+      (pexprbracket (exp)
+        (let* (
+          (tbl-name (eval-prefixexpr pre lenv))
+          (tbl (apply-env lenv genv tbl-name)))
+        (if (table-val? tbl)
+          (table-get (expval->table tbl) (eval-expr exp lenv))
+          (error-attempt-index tbl-name (expval-name tbl)))))
       (else (error-not-implemented)))))
 
 ;; eval-prefixexpr : PREFIXEXPR * LocalEnv
@@ -262,6 +307,7 @@
       (falseexpr () (bool-val #f))
       (nilexpr () (nil-val))
       (primaryexpr (e) (eval-primaryexpr e lenv))
+      (tableexpr (t) (eval-tableconstructor t lenv))
       (else (error-not-implemented)))))
 
 ;; eval-primaryexpr : PRIMARYEXPR * LocalEnv
@@ -360,3 +406,43 @@
         (else
           (bool-val (apply operator
             (list (expval->num loperand) (expval->num roperand)))))))))
+
+;; eval-tableconstructor : TABLECONSTRUCTOR * LocalEnv -> Table
+(define eval-tableconstructor
+  (lambda (tc lenv)
+    (cases TABLECONSTRUCTOR tc
+      (tableconstructor (field-list)
+        (table-val (initialize-table
+          (make-table) (fieldlist->list field-list) lenv))))))
+
+;; initialize-table : Table * List(FIELD) * LocalEnv -> Table
+;; add the initial fields to a table
+(define initialize-table
+  (lambda (tbl fields lenv)
+    (letrec ((loop (lambda (flds count)
+      (if (null? flds) tbl
+        (cases FIELD (car flds)
+          (field1 (lhs rhs)
+            (let ((lhs-val (eval-expr lhs lenv)))
+              (begin
+                (cond
+                  ((and (num-val? lhs-val) (< (expval->num lhs-val) count)) (void))
+                  ((nil-val? lhs-val) (error-nil-index))
+                  (else (table-set! tbl lhs-val (eval-expr rhs lenv))))
+                (loop (cdr flds) count))))
+          (field2 (exp rhs)
+            (let ((length-rhs (length rhs)))
+              (cond
+                ((= length-rhs 0)
+                  (begin
+                    (table-set! tbl (num-val count) (eval-expr exp lenv))
+                    (loop (cdr flds) (+ count 1))))
+                ((= length-rhs 1)
+                  (begin
+                    (let ((id (expr->id exp)))
+                      (if id
+                        (table-set! tbl id (eval-expr (car rhs) lenv))
+                        (error-syntax-tableconstructor)))
+                    (loop (cdr flds) count)))
+          (else (error-syntax-tableconstructor))))))))))
+    (loop fields 1))))

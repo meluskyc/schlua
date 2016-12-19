@@ -8,7 +8,8 @@
 (provide global-env global-env? global-env-record empty-global-env apply-global-env
 global-env-pos extend-local-env extend-local-env* extend-global-env extend-global-env* local-env? empty-local-env-record
 ext-local-env-record empty-local-env apply-local-env apply-env extend-env extend-env*
-proc proc? procedure lib-procedure expval expval? num-val bool-val string-val nil-val proc-val)
+proc proc? procedure lib-procedure expval expval? num-val bool-val string-val nil-val
+proc-val table-val make-table table-set! table-get)
 
 ;; expressed values
 (define-datatype expval expval?
@@ -20,7 +21,9 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
     (string string?))
   (nil-val)
   (proc-val
-    (proc proc?)))
+    (proc proc?))
+  (table-val
+    (table table?)))
 
 ;; proc? : SchemeVal -> Bool
 ;; procedure : Var * Exp * Env -> Proc
@@ -32,6 +35,26 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
   (lib-procedure
     (params (list-of symbol?))
     (function procedure?)))
+
+;; table? : ExpVal -> Bool
+(define table?
+  (lambda (t) (hash? t)))
+
+;; make-table : () -> Table
+;; construct an empty table
+(define make-table
+  (lambda ()
+    (make-hash)))
+
+;; table-set! : Table * ExpVal * ExpVal
+(define table-set!
+  (lambda (tbl fld val)
+    (hash-set! tbl fld val)))
+
+;; table-get : Table * ExpVal
+(define table-get
+  (lambda (tbl fld)
+    (hash-ref tbl fld (nil-val))))
 
 ;;;;;;;;;;; global environment ;;;;;;;;;;;
 
