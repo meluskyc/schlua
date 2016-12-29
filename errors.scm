@@ -7,7 +7,7 @@ error-syntax-assignrhs error-invalid-reference error-syntax-callsufs
 error-syntax-eof error-multiple-return error-syntax-tableconstructor error-nil-index
 error-attempt-index)
 
-; error-arithmetic : Sym
+;; error-arithmetic : Sym
 (define error-arithmetic
   (lambda (type)
     (eopl:error 'error "attempt to perform arithmetic on a ~s value" type)))

@@ -3,7 +3,6 @@
 
 (local-require "references.scm")
 (require "generated.scm")
-(require data/gvector)
 
 (provide global-env? empty-global-env apply-global-env extend-local-env extend-local-env*
 extend-global-env local-env? empty-local-env apply-local-env apply-env
@@ -45,12 +44,12 @@ nil-val proc-val table-val make-table table-set! table-get)
   (lambda ()
     (make-hash)))
 
-;; table-set! : Table * ExpVal * ExpVal
+;; table-set! : Table * SchemeVal * SchemeVal
 (define table-set!
   (lambda (tbl fld val)
     (hash-set! tbl fld val)))
 
-;; table-get : Table * ExpVal
+;; table-get : Table * SchemeVal
 (define table-get
   (lambda (tbl fld)
     (hash-ref tbl fld (nil-val))))
@@ -90,6 +89,7 @@ nil-val proc-val table-val make-table table-set! table-get)
 
 (define empty-local-env-record? null?)
 
+;; local-env? : SchemeVal -> Bool
 (define local-env?
   (lambda (x)
     (or (empty-local-env-record? x)
@@ -110,10 +110,12 @@ nil-val proc-val table-val make-table table-set! table-get)
   (lambda (r)
     (cdr r)))
 
+;; empty-local-env : () -> LocalEnv
 (define empty-local-env
   (lambda ()
     (empty-local-env-record)))
 
+;; empty-local-env? : SchemeVal -> Bool
 (define empty-local-env?
   (lambda (x)
     (empty-local-env-record? x)))
