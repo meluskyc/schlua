@@ -4,7 +4,7 @@
 (local-require "datatypes.scm")
 (local-require "references.scm")
 
-(provide lib-env)
+(provide lib-env lprint)
 
 ;; lprint : List(ExpVal)
 (define lprint

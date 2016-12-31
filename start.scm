@@ -14,10 +14,25 @@
 ;; empty local env
 (define lenv (empty-local-env))
 
-;; run : String
-(define run
+;; run-str : String
+(define run-str
   (lambda (string)
     (eval-block (scan&parse string) lenv)))
+
+;; run : BLOCK
+(define run
+  (lambda (blk)
+    (eval-block (scan&parse blk) lenv)))
+
+;; repl : ()
+(define repl
+  (lambda ()
+    (let loop ()
+      (define blk (read-line))
+      (let ((rslt (run blk)))
+        (unless (void? rslt) (lprint (list rslt)))
+        (display ">") (flush-output)
+        (loop)))))
 
 ;; eval-block : BLOCK * LocalEnv
 (define eval-block
