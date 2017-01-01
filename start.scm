@@ -52,7 +52,7 @@
               (if (null? lstat)
                 temp
                 (if (> (length lstat) 1) (error-multiple-return)
-                  (eval-lstat (car lstat) lenv)))
+                  (eval-lstat (car lstat) env)))
               (cases STAT (car s)
                 (localstat (suf) (loop (cdr s) (eval-localstat suf env) temp))
                 (else
