@@ -3,12 +3,11 @@
 
 (local-require "references.scm")
 (require "generated.scm")
-(require data/gvector)
 
-(provide global-env global-env? global-env-record empty-global-env apply-global-env
-global-env-pos extend-local-env extend-local-env* extend-global-env extend-global-env* local-env? empty-local-env-record
-ext-local-env-record empty-local-env apply-local-env apply-env extend-env extend-env*
-proc proc? procedure lib-procedure expval expval? num-val bool-val string-val nil-val proc-val)
+(provide global-env? empty-global-env apply-global-env extend-local-env extend-local-env*
+extend-global-env local-env? empty-local-env apply-local-env apply-env
+extend-env proc proc? procedure lib-procedure expval expval? num-val bool-val string-val
+nil-val proc-val table-val make-table table-set! table-get)
 
 ;; expressed values
 (define-datatype expval expval?
@@ -20,7 +19,9 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
     (string string?))
   (nil-val)
   (proc-val
-    (proc proc?)))
+    (proc proc?))
+  (table-val
+    (table table?)))
 
 ;; proc? : SchemeVal -> Bool
 ;; procedure : Var * Exp * Env -> Proc
@@ -33,75 +34,48 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
     (params (list-of symbol?))
     (function procedure?)))
 
+;; table? : ExpVal -> Bool
+(define table?
+  (lambda (t) (hash? t)))
+
+;; make-table : () -> Table
+;; construct an empty table
+(define make-table
+  (lambda ()
+    (make-hash)))
+
+;; table-set! : Table * SchemeVal * SchemeVal
+(define table-set!
+  (lambda (tbl fld val)
+    (hash-set! tbl fld val)))
+
+;; table-get : Table * SchemeVal
+(define table-get
+  (lambda (tbl fld)
+    (hash-ref tbl fld (nil-val))))
+
 ;;;;;;;;;;; global environment ;;;;;;;;;;;
 
-(define-datatype global-env global-env?
-  (global-env-record
-    (syms gvector?)
-    (vals gvector?)))
+(define global-env? table?)
 
-(define empty-global-env
-  (lambda ()
-    (global-env-record (make-gvector) (make-gvector))))
+(define empty-global-env make-table)
 
 ;; apply-global-env : GlobalEnv * Sym -> ExpVal
 ;; retrieve from global and dereference
 (define apply-global-env
   (lambda (env sym)
-    (let ((ref (apply-global-env-ref env sym)))
-      (if ref (deref ref) (nil-val)))))
-
-;; apply-global-env-ref : GlobalEnv * Sym -> Ref
-;; retrieve ref from global, #f if not found
-(define apply-global-env-ref
-  (lambda (env sym)
-    (cases global-env env
-      (global-env-record (syms vals)
-        (for/first
-          ((v (in-gvector vals))
-          (s (in-gvector syms)) #:when (eq? s sym)) v)))))
-
-;; global-env-pos : GlobalEnv * Sym -> Int
-;; get position of sym in env, #f if not found
-(define global-env-pos
-  (lambda (env sym)
-    (cases global-env env
-      (global-env-record (syms vals)
-        (for/first
-          ((i (in-naturals 0))
-          (s (in-gvector syms)) #:when (eq? s sym)) i)))))
+    (let ((ref (table-get env sym)))
+      (if (reference? ref) (deref ref) ref))))
 
 ;; extend-global-env : Sym * ExpVal * GlobalEnv
 ;; in global env -> update store ref
 ;; otherwise add to global
 (define extend-global-env
   (lambda (sym val env)
-    (cases global-env env
-      (global-env-record (syms vals)
-        (let ((pos (global-env-pos env sym)))
-          (if pos
-            (setref! (gvector-ref vals pos) val)
-            (begin
-              (gvector-add! syms sym)
-              (gvector-add! vals (newref val)))))))))
-
-;; extend-global-env : List(Sym) * List(ExpVal) * GlobalEnv
-(define extend-global-env*
-  (lambda (syms vals env)
-    (cases global-env env
-      (global-env-record (s v)
-        (letrec ((loop (lambda (syms2 vals2)
-          (cond
-            ((null? syms2) (void))
-            ((null? vals2) ; TODO: move this logic to start.scm
-              (begin
-                (extend-global-env (car syms2) (nil-val) env)
-                (loop (cdr syms2) vals2)))
-            (else
-              (begin
-                (extend-global-env (car syms2) (car vals2) env)
-                (loop (cdr syms2) (cdr vals2))))))))
-        (loop syms vals))))))
+    (let ((ref (table-get env sym)))
+      (if (reference? ref)
+        (setref! ref val)
+        (table-set! env sym (newref val))))))
 
 ;;;;;;;;;;; local environment ;;;;;;;;;;;
 
@@ -115,6 +89,7 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
 
 (define empty-local-env-record? null?)
 
+;; local-env? : SchemeVal -> Bool
 (define local-env?
   (lambda (x)
     (or (empty-local-env-record? x)
@@ -135,10 +110,12 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
   (lambda (r)
     (cdr r)))
 
+;; empty-local-env : () -> LocalEnv
 (define empty-local-env
   (lambda ()
     (empty-local-env-record)))
 
+;; empty-local-env? : SchemeVal -> Bool
 (define empty-local-env?
   (lambda (x)
     (empty-local-env-record? x)))
@@ -192,8 +169,7 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
   (lambda (lenv genv id)
     (let ((local-ref (apply-local-env-ref lenv id)))
       (if local-ref (deref local-ref)
-        (let ((global-ref (apply-global-env-ref genv id)))
-          (if global-ref (deref global-ref) (nil-val)))))))
+        (apply-global-env genv id)))))
 
 ;; extend-env : LocalEnv * GlobalEnv * Sym * Val
 ;; if       in local env? -> update the reference
@@ -204,17 +180,3 @@ proc proc? procedure lib-procedure expval expval? num-val bool-val string-val ni
     (let ((local-ref (apply-local-env-ref lenv id)))
       (if local-ref (setref! local-ref val)
         (extend-global-env id val genv)))))
-
-;; extend-env* : LocalEnv * GlobalEnv * List(Sym) * List(Val)
-(define extend-env*
-  (lambda (lenv genv ids vals)
-    (cond
-      ((null? ids) (void))
-      ((null? vals) ;; TODO: move this logic to start
-        (begin
-          (extend-global-env (car ids) (nil-val) genv)
-          (extend-env* lenv genv (cdr ids) vals)))
-      (else
-        (begin
-          (extend-global-env (car ids) (car vals) genv)
-          (extend-env* lenv genv (cdr ids) (cdr vals)))))))

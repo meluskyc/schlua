@@ -42,6 +42,7 @@
     (SIMPLEEXPR ("false") falseexpr)
     (SIMPLEEXPR ("elip") elipexpr)
     (SIMPLEEXPR ("function" BODY) functionexpr)
+    (SIMPLEEXPR (TABLECONSTRUCTOR) tableexpr)
     (SIMPLEEXPR (PRIMARYEXPR) primaryexpr)
     (PRIMARYEXPR (PREFIXEXPR (arbno PRIMARYEXPRSUF)) pexpr)
     (PREFIXEXPR (identifier) prefixid)
@@ -50,6 +51,13 @@
     (PRIMARYEXPRSUF ("[" EXPR "]") pexprbracket)
     (PRIMARYEXPRSUF (":" identifier FUNCARGS) pexprcolon)
     (PRIMARYEXPRSUF (FUNCARGS) pexprargs)
+
+    (TABLECONSTRUCTOR ("{" FIELDLIST "}") tableconstructor)
+    (FIELD ("[" EXPR "]" "=" EXPR) field1)
+    (FIELD (EXPR (arbno "=" EXPR)) field2)
+    (FIELDLIST ((separated-list FIELD FIELDSEP)) fieldlist)
+    (FIELDSEP (",") fieldsep)
+    (FIELDSEP (";") fieldsep2)
 
     (UNOP ("not") notunop)
     (UNOP ("#") hashunop)

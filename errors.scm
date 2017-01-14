@@ -4,9 +4,10 @@
 (provide error-arithmetic error-not-implemented error-syntax-call
 error-syntax-else error-compare error-syntax-assignlhs
 error-syntax-assignrhs error-invalid-reference error-syntax-callsufs
-error-syntax-eof error-multiple-return)
+error-syntax-eof error-multiple-return error-syntax-tableconstructor error-nil-index
+error-attempt-index)
 
-; error-arithmetic : Sym
+;; error-arithmetic : Sym
 (define error-arithmetic
   (lambda (type)
     (eopl:error 'error "attempt to perform arithmetic on a ~s value" type)))
@@ -60,3 +61,18 @@ error-syntax-eof error-multiple-return)
 (define error-multiple-return
   (lambda ()
     (eopl:error 'syntax-error "<eof> expected near 'return'")))
+
+;; error-syntax-invalidid : ()
+(define error-syntax-tableconstructor
+  (lambda ()
+    (eopl:error 'syntax-error "'}' expected near '='")))
+
+;; error-nil-index : ()
+(define error-nil-index
+  (lambda ()
+    (eopl:error 'error "table index is nil")))
+
+;; error-attempt-index : Id * Sym
+(define error-attempt-index
+  (lambda (id type)
+    (eopl:error 'error "attempt to index '~s' (a ~s value)" id type)))

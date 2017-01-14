@@ -4,7 +4,7 @@
 (local-require "datatypes.scm")
 (local-require "references.scm")
 
-(provide lib-env)
+(provide lib-env lprint)
 
 ;; lprint : List(ExpVal)
 (define lprint
@@ -33,6 +33,7 @@
       (string-val (s) (format "~a\t" s))
       (nil-val () "nil\t")
       (proc-val (p) "function\t")
+      (table-val (t) "table\t")
       (else "nil\t"))))
 
 (define lib-env (empty-global-env))

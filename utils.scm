@@ -6,7 +6,8 @@
 
 (provide exprlist->list parlist->list expval->num expval->bool
 expval->string expval->nil expval->proc num-val? bool-val? string-val?
-nil-val? proc-val? expval-name)
+nil-val? proc-val? expval-name table-val? expr->id fieldlist->list
+expval->table)
 
 ;; expval->num : ExpVal -> Int
 (define expval->num
@@ -43,10 +44,17 @@ nil-val? proc-val? expval-name)
       (proc-val (proc) proc)
       (else (expval-extractor-error 'proc v)))))
 
+;; expval->table : ExpVal -> Table
+(define expval->table
+  (lambda (v)
+    (cases expval v
+      (table-val (tbl) tbl)
+      (else (expval-extractor-error 'table v)))))
+
 (define expval-extractor-error
   (lambda (variant value)
     (eopl:error 'expval-extractors "Looking for a ~s, found ~s"
-variant value)))
+      variant value)))
 
 ;; num-val? : ExpVal -> Bool
 (define num-val?
@@ -83,6 +91,13 @@ variant value)))
       (proc-val (p) #t)
       (else #f))))
 
+;; table-val? : ExpVal -> Bool
+(define table-val?
+  (lambda (e)
+    (cases expval e
+      (table-val (t) #t)
+      (else #f))))
+
 ;; expval-name : ExpVal -> symbol
 (define expval-name
   (lambda (e)
@@ -91,6 +106,7 @@ variant value)))
       (bool-val (b) 'boolean)
       (string-val (s) 'string)
       (nil-val () 'nil)
+      (table-val (t) 'table)
       (proc-val (p) 'function))))
 
 ;; exprlist->list : EXPRLIST -> List(EXPR)
@@ -104,3 +120,28 @@ variant value)))
   (lambda (p)
     (cases PARLIST p
       (parlist (first rest) (cons first rest)))))
+
+;; fieldlist->list : FIELDLIST -> List(FIELD)
+(define fieldlist->list
+  (lambda (fldlist)
+    (cases FIELDLIST fldlist
+      (fieldlist (fields) fields))))
+
+;; expr->id : EXPR -> Id
+;; #f otherwise
+(define expr->id
+  (lambda (exp)
+    (cases EXPR exp
+      (expr (simple list-binop list-simple)
+        (if (or (pair? list-binop) (pair? list-simple)) #f
+          (cases SIMPLEEXPR simple
+            (primaryexpr (pexp)
+              (cases PRIMARYEXPR pexp
+                (pexpr (pre sufs)
+                  (cases PREFIXEXPR pre
+                    (prefixid (id)
+                      (if (= 0 (length sufs)) id #f))
+                    (else #f)))
+                (else #f)))
+            (else #f))))
+      (else #f))))
